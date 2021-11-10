@@ -21,7 +21,9 @@ embed = hub.load("https://tfhub.dev/google/universal-sentence-encoder-multilingu
 class Clustering(flask_restful.Resource):
     def get(self, job_id):
         if job_id in jobs.keys():
-            return send_message(jobs[job_id], label="data"), 200
+            result = jobs[job_id]
+            del jobs[job_id]
+            return send_message(result, label="data"), 200
         return send_message("Processo não encontrado."), 404
 
     def post(self, job_id=None):
