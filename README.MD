@@ -1,6 +1,6 @@
 ### API para Clusterização
 
-Api que aplica KNN à uma série de frases. Para isso usei um [embedding](https://tfhub.dev/google/universal-sentence-encoder-multilingual-large/3) treinado.
+Api que aplica Kmeans à uma série de frases. Para isso usei um [embedding](https://tfhub.dev/google/universal-sentence-encoder-multilingual-large/3) treinado.
 
 Recebe como entrada:
 
