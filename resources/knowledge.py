@@ -6,9 +6,10 @@ import flask
 from numpy.linalg import norm
 
 
-def intent_threshold(data):
+def intent_threshold(data, output_mean=None):
     output = to_embed_vector(data).numpy()
-    output_mean = output.mean(axis=0)
+    if output_mean is None:
+        output_mean = output.mean(axis=0)
     return avg_distance(output, output_mean)
 
 
@@ -20,13 +21,16 @@ def avg_distance(data, data_mean):
 
 def check_clusters(data, intent_reference):
     threshold = intent_threshold(intent_reference)
+    print(threshold)
     clusters = {}
-    for entry in data:
+    for entry in data["clusters"]:
         if entry["cluster"] not in clusters.keys():
             clusters[entry["cluster"]] = [entry["phrase"]]
         else:
             clusters[entry["cluster"]] += [entry["phrase"]]
-    return str([(key, value) for key in clusters.keys() if (value := intent_threshold(clusters[key])) < threshold])
+    return [{"cluster": key,
+             "threshold": (value := intent_threshold(clusters[key], output_mean=data["cluster_centers"][key])),
+             "intent_test": "CANDIDATE" if value < threshold else "IGNORED"} for key in clusters.keys()]
 
 
 

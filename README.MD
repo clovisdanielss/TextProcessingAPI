@@ -2,6 +2,7 @@
 
 Api que aplica Kmeans à uma série de frases. Para isso usei um [embedding](https://tfhub.dev/google/universal-sentence-encoder-multilingual-large/3) treinado.
 
+### Clustering
 Recebe como entrada:
 
 rota: POST /clustering/?n_clusters=<i>total_de_clusters</i>
@@ -28,78 +29,109 @@ Recebe como resposta um uid da requisição:
     "id": "e05d09a2-fb9c-48fe-be8f-5b878a8c539e"
 }
 ```
-Para ter o resultado da clusterização, basta checar.
+Para ter o resultado da clusterização, basta checar. Uma vez que você resgate o resultado ele não estará mais disponível no servidor, então é bom que guarde.
+Também para computar os clusters pode demorar um pouco, então persista fazendo vários requests até conseguir resgatar seu resultado.
 
-rota: GET/clustering/c2893574-7952-415d-a9af-b84698a726bf
+rota: GET /clustering/c2893574-7952-415d-a9af-b84698a726bf
 ```json
 {
-    "data": [
-        {
-            "phrase": "Eu odeio biscoito",
+  "data": {
+    "clusters": [
+      {
+        "phrase": "Cadê o carro que não chega?",
+        "cluster": "0",
+        "nearest_word": "jesus",
+        "nearest_words": "vem,jesus,cadê"
+      },
+      ...,
+      {
+        "phrase": "A ineternet revolucionou o mundo",
+        "cluster": "2",
+        "nearest_word": "chocolate",
+        "nearest_words": "gosto,chocolate,quero"
+      }
+    ],
+    "cluster_centers": [
+      [
+        0.026613954454660416,
+        ...
+      ],
+      ...
+    ]
+  }
+}
+```
+
+### Knowledge
+Essa rota, a partir do conhecimento prévio de uma intenção de referência, e de
+uma análise feita pela rota clustering, infere qual dos clusters
+pode ser intendido como uma intenção. A estratégia apresentada a seguir é ingênua, e deve ser aplicado somente
+se for usado o mesmo tipo de embending para intenção de referência e clusters.
+
+Isso é feito calculando o ponto médio do conjunto de frases que representam
+a intenção de referência. A partir desse ponto médio, é obtido a distância
+média entre ele e cada frase da intenção. 
+
+O mesmo esquema é aplicado a cada cluster encontrado pela análise. Se algum cluster
+apresentar a distância média menor que a intenção, consideramos ele uma possível intenção
+
+rota: POST /knowledge/
+```json
+{
+    "data": {
+        "clusters": [
+          {
+            "phrase": "Cadê o carro que não chega?",
             "cluster": "0",
-            "nearest_word": "quero",
-            "nearest_words": "biscoito,comer,quero"
-        },
-        {
-            "phrase": "Eu gosto de comer biscoito",
-            "cluster": "0",
-            "nearest_word": "quero",
-            "nearest_words": "biscoito,comer,quero"
-        },
-        {
-            "phrase": "Eu quero ir pra praia",
-            "cluster": "0",
-            "nearest_word": "quero",
-            "nearest_words": "biscoito,comer,quero"
-        },
-        {
-            "phrase": "Eu quero comer",
-            "cluster": "0",
-            "nearest_word": "quero",
-            "nearest_words": "biscoito,comer,quero"
-        },
-        {
-            "phrase": "Isso não tem nada haver",
-            "cluster": "1",
-            "nearest_word": "nada",
-            "nearest_words": "nada,haver"
-        },
-        {
-            "phrase": "Isso é um teste",
+            "nearest_word": "jesus",
+            "nearest_words": "vem,jesus,cadê"
+          },
+          ...,
+          {
+            "phrase": "A ineternet revolucionou o mundo",
             "cluster": "2",
-            "nearest_word": "teste",
-            "nearest_words": "teste,outro,terceiro"
-        },
-        {
-            "phrase": "Isso é outro teste",
-            "cluster": "2",
-            "nearest_word": "teste",
-            "nearest_words": "teste,outro,terceiro"
-        },
-        {
-            "phrase": "Um terceiro teste pra variar",
-            "cluster": "2",
-            "nearest_word": "teste",
-            "nearest_words": "teste,outro,terceiro"
-        },
-        {
-            "phrase": "Colher de pau, assubanipal",
-            "cluster": "3",
-            "nearest_word": "maíra",
-            "nearest_words": "colher,pau,assubanipal"
-        },
-        {
-            "phrase": "Maíra é minha esposa",
-            "cluster": "3",
-            "nearest_word": "maíra",
-            "nearest_words": "colher,pau,assubanipal"
-        },
-        {
-            "phrase": "De abóbora com melão faz melancia",
-            "cluster": "3",
-            "nearest_word": "maíra",
-            "nearest_words": "colher,pau,assubanipal"
-        }
+            "nearest_word": "chocolate",
+            "nearest_words": "gosto,chocolate,quero"
+          }
+        ],
+        "cluster_centers": [
+          [
+            0.026613954454660416,
+            ...
+          ],
+          ...
+        ]
+    },
+    "intent_reference": [
+        "horário",
+        ...,
+        "qual o horario de funcionamento"
     ]
 }
 ```
+
+Esse post tem como resposta o seguinte json:
+
+````json
+{
+    "data": [
+        {
+            "cluster": 0,
+            "threshold": 0.7663090999764368,
+            "intent_test": "IGNORED"
+        },
+        {
+            "cluster": 1,
+            "threshold": 0.30518764018629285,
+            "intent_test": "CANDIDATE"
+        },
+        {
+            "cluster": 2,
+            "threshold": 0.7969371948278763,
+            "intent_test": "IGNORED"
+        }
+    ]
+}
+````
+Onde "CANDIDATE" é todo cluster que tem uma distância média menor do que a
+intenção de referência.

@@ -9,8 +9,7 @@ import nltk
 from sklearn.cluster import KMeans
 import tensorflow as tf
 import gap_statistic
-from initialize import jobs, sem, embed
-
+from initialize import jobs, sem, embed, api
 
 def to_embed_vector(data, batch=10, i=0, size=None):
     if size is None or size > len(data):
@@ -64,8 +63,8 @@ def nearest_words(data, output, class_sample, cluster, n=5):
 
 
 def show_first_n(data, class_sample, cluster, n=10, nearest=None, most_frequent=None):
-    result = [{"phrase": data[i], "cluster": str(cluster.labels_[i]), "nearest_word": nearest,
-               "nearest_words": most_frequent} for i in range(len(cluster.labels_)) if
+    result = [{"phrase": data[i], "cluster": int(cluster.labels_[i]), "nearest_word": nearest,
+               "nearest_words": most_frequent} for i in range(len(data)) if
               cluster.labels_[i] == class_sample][:n]
     return result
 
@@ -87,15 +86,15 @@ def process_data(data, uid, n_clusters, max_clusters):
         elif n_clusters is not None:
             n_clusters = int(n_clusters)
         cluster = KMeans(n_clusters=n_clusters, random_state=0).fit(output.numpy())
-
         result = []
         for i in set(cluster.labels_):
             most_freq = most_frequent_words(data, i, cluster)
             nearest = nearest_words(data, output, i, cluster)
             result += show_first_n(data, i, cluster, nearest=nearest, most_frequent=",".join(most_freq))
         sem.acquire()
-        jobs[uid] = result
+        jobs[uid] = {"clusters": result, "cluster_centers": cluster.cluster_centers_.tolist()}
         sem.release()
+        api.app.logger.info("Job %s done", uid)
     except Exception as e:
         jobs[uid] = send_message(str(e), label="error")
 

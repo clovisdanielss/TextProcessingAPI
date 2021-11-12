@@ -1,11 +1,6 @@
-import json
-import flask
-import flask_restful
 from resources.clustering import Clustering
 from resources.knowledge import Knowledge
-
-app = flask.Flask("ReportAPI")
-api = flask_restful.Api(app)
+from initialize import api, app
    
 
 api.add_resource(Clustering, '/clustering/', '/clustering/<job_id>')
