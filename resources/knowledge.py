@@ -21,7 +21,6 @@ def avg_distance(data, data_mean):
 
 def check_clusters(data, intent_reference):
     threshold = intent_threshold(intent_reference)
-    print(threshold)
     clusters = {}
     for entry in data["clusters"]:
         if entry["cluster"] not in clusters.keys():
@@ -29,7 +28,7 @@ def check_clusters(data, intent_reference):
         else:
             clusters[entry["cluster"]] += [entry["phrase"]]
     return [{"cluster": key,
-             "threshold": (value := intent_threshold(clusters[key], output_mean=data["cluster_centers"][key])),
+             "threshold": (value := intent_threshold(clusters[key], output_mean=data["cluster_centers"][key]) if len(clusters[key]) > 1 else 999),
              "intent_test": "CANDIDATE" if value < threshold else "IGNORED"} for key in clusters.keys()]
 
 
