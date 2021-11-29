@@ -6,7 +6,7 @@ import flask_restful
 import numpy as np
 import tensorflow_text
 import nltk
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, DBSCAN
 import tensorflow as tf
 import gap_statistic
 from initialize import jobs, sem, embed, api, app
@@ -86,10 +86,36 @@ def show_first_n(data, class_sample, cluster, n=10, nearest=None, most_frequent=
               cluster.labels_[i] == class_sample][:n]
     return result
 
+def run_kmeans(uid, n_clusters, max_clusters, output, algorithm):
+    if max_clusters is not None:
+        api.app.logger.info("Job %s - Searching optimal K", uid)
+        optimizer = gap_statistic.OptimalK(parallel_backend='joblib')
+        max_clusters = int(max_clusters)
+        n_clusters = optimizer(output, cluster_array=[i for i in range(2, max_clusters)])
+    elif n_clusters is not None:
+        n_clusters = int(n_clusters)
+    api.app.logger.info("Job %s - Running %s", uid, algorithm)
+    cluster = KMeans(n_clusters=n_clusters, random_state=0).fit(output)
+    return cluster
 
-def process_data(data, uid, n_clusters, max_clusters, n_components=64):
+def run_dbscan(uid, n_clusters, output, algorithm):
+    n_clusters = int(n_clusters)
+    api.app.logger.info("Job %s - Running %s", uid, algorithm)
+    cluster = DBSCAN().fit(output)
+    return cluster
+
+def build_result(data, uid, cluster, output):
+    api.app.logger.info("Job %s - Running Nearest Words", uid)
+    result = []
+    most_freq = most_frequent_words(data, cluster)
+    nearest = nearest_word(most_freq, output, cluster)
+    for i in set(cluster.labels_):
+        result += show_first_n(data, i, cluster, nearest=nearest, most_frequent=most_freq)
+    return result
+
+def process_data(data, uid, n_clusters, max_clusters, algorithm, n_components=64):
     time_start = time()
-    if max_clusters is None and n_clusters is None:
+    if algorithm == "KMEANS" and max_clusters is None and n_clusters is None:
         jobs[uid] = send_message("Must exist a query with max_clusters or n_clusters", label="error")
         return
     try:
@@ -99,27 +125,13 @@ def process_data(data, uid, n_clusters, max_clusters, n_components=64):
         data = [phrase for phrase in data if not phrase.isnumeric()]
         api.app.logger.info("Job %s - Transforming phrases in vectors", uid)
         output = to_embed_vector(data).numpy()
-        # n_components = n_components if output.shape[0] > 64 else output.shape[0]
-        # api.app.logger.info("Job %s - Starting PCA dim(512) => dim(%d)", uid, n_components)
-        # pca = PCA(n_components=n_components)
-        # pca_output = pca.fit_transform(output)
-        if max_clusters is not None:
-            api.app.logger.info("Job %s - Searching optimal K", uid)
-            optimizer = gap_statistic.OptimalK(parallel_backend='joblib')
-            max_clusters = int(max_clusters)
-            n_clusters = optimizer(output, cluster_array=[i for i in range(2, max_clusters)])
-        elif n_clusters is not None:
-            n_clusters = int(n_clusters)
-        api.app.logger.info("Job %s - Running KMEANS", uid)
-        cluster = KMeans(n_clusters=n_clusters, random_state=0).fit(output)
-        api.app.logger.info("Job %s - Running Nearest Words", uid)
-        result = []
-        most_freq = most_frequent_words(data, cluster)
-        nearest = nearest_word(most_freq, output, cluster)
-        for i in set(cluster.labels_):
-            result += show_first_n(data, i, cluster, nearest=nearest, most_frequent=most_freq)
+        if algorithm == 'KMEANS':
+            cluster = run_kmeans(uid, n_clusters, max_clusters, output, algorithm)
+        elif algorithm == 'DBSCAN':
+            cluster = run_dbscan(uid, n_clusters, output, algorithm)
+        result = build_result(data, uid, cluster, output)
         sem.acquire()
-        jobs[uid] = {"clusters": result, "cluster_centers": cluster.cluster_centers_.tolist()}
+        jobs[uid] = {"clusters": result, "cluster_centers": cluster.cluster_centers_.tolist() if algorithm == 'KMEANS' else []}
         sem.release()
         time_total = time() - time_start
         api.app.logger.info("Job %s - Done in %s", uid, str(time_total))
@@ -141,7 +153,10 @@ class Clustering(flask_restful.Resource):
         body = flask.request.json
         n_clusters = flask.request.args.get('n_clusters')
         max_clusters = flask.request.args.get('max_clusters')
+        algorithm = flask.request.args.get('algorithm')
+        if algorithm is None:
+            algorithm = 'KMEANS'
         uid = str(uuid.uuid4())
-        thread = Thread(target=process_data, args=(body["messages"], uid, n_clusters, max_clusters))
+        thread = Thread(target=process_data, args=(body["messages"], uid, n_clusters, max_clusters, algorithm))
         thread.start()
         return send_message(uid, label="id"), 201
