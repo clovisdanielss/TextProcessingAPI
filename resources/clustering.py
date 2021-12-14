@@ -6,6 +6,7 @@ import flask_restful
 import numpy as np
 import tensorflow_text
 import nltk
+from nltk.tokenize import RegexpTokenizer
 from sklearn.cluster import KMeans, DBSCAN
 import tensorflow as tf
 import gap_statistic
@@ -13,6 +14,7 @@ from initialize import jobs, sem, embed, api, app
 from sklearn.decomposition import PCA
 from time import time
 import logging
+import gc
 
 
 def to_embed_vector(data, batch=10, i=0, size=None):
@@ -80,10 +82,13 @@ def nearest_word(most_frequent, output, cluster, n=5):
     return result
 
 
-def show_first_n(data, class_sample, cluster, n=10, nearest=None, most_frequent=None):
-    result = [{"phrase": data[i], "cluster": int(cluster.labels_[i]), "nearest_word": nearest[class_sample],
-               "nearest_words": most_frequent[class_sample]} for i in range(len(data)) if
-              cluster.labels_[i] == class_sample][:n]
+def show_first_n(raw_data, processed_data, class_sample, cluster, n=1000, nearest=None, most_frequent=None):
+    try:
+        result = [{"phrase": raw_data[i], "cluster": int(cluster.labels_[i]), "nearest_word": nearest[class_sample],
+                "frequent_words": most_frequent[class_sample]} for i in range(len(processed_data)) if
+                cluster.labels_[i] == class_sample][:n]
+    except:
+        result = []
     return result
 
 def run_kmeans(uid, n_clusters, max_clusters, output, algorithm):
@@ -104,13 +109,13 @@ def run_dbscan(uid, n_clusters, output, algorithm):
     cluster = DBSCAN().fit(output)
     return cluster
 
-def build_result(data, uid, cluster, output):
+def build_result(raw_data, processed_data, uid, cluster, output):
     api.app.logger.info("Job %s - Running Nearest Words", uid)
     result = []
-    most_freq = most_frequent_words(data, cluster)
+    most_freq = most_frequent_words(processed_data, cluster)
     nearest = nearest_word(most_freq, output, cluster)
     for i in set(cluster.labels_):
-        result += show_first_n(data, i, cluster, nearest=nearest, most_frequent=most_freq)
+        result += show_first_n(raw_data, processed_data, i, cluster, nearest=nearest, most_frequent=most_freq)
     return result
 
 def process_data(data, uid, n_clusters, max_clusters, algorithm, n_components=64):
@@ -119,17 +124,32 @@ def process_data(data, uid, n_clusters, max_clusters, algorithm, n_components=64
         jobs[uid] = send_message("Must exist a query with max_clusters or n_clusters", label="error")
         return
     try:
-        data = [phrase.replace("\n", "") for phrase in data]
-        data = [phrase.replace("\"", "") for phrase in data]
-        data = [phrase for phrase in data if len(phrase) != 0]
-        data = [phrase for phrase in data if not phrase.isnumeric()]
+        tokenizer = RegexpTokenizer(r'\w+')
+        urlTokenizer = RegexpTokenizer(r'https?:\/\/[\S]+')
+        raw_data = []
+        processed_data = []
+        for raw_phrase in data:
+            phrase = raw_phrase.replace("\n", "")
+            phrase = phrase.replace("\"", "")
+            if len(phrase) == 0 and phrase.isnumeric():
+                continue
+            phrase = phrase.lower()
+            urls = urlTokenizer.tokenize(phrase)
+            for url in urls:
+                phrase = phrase.replace(url, "")
+            tokens = [token for token in tokenizer.tokenize(phrase) if token not in nltk.corpus.stopwords.words("portuguese")]
+            if len(tokens) <= 1:
+                continue
+            phrase = " ".join(tokens)
+            processed_data.append(phrase)
+            raw_data.append(raw_phrase)
         api.app.logger.info("Job %s - Transforming phrases in vectors", uid)
-        output = to_embed_vector(data).numpy()
+        output = to_embed_vector(processed_data).numpy()
         if algorithm == 'KMEANS':
             cluster = run_kmeans(uid, n_clusters, max_clusters, output, algorithm)
         elif algorithm == 'DBSCAN':
             cluster = run_dbscan(uid, n_clusters, output, algorithm)
-        result = build_result(data, uid, cluster, output)
+        result = build_result(raw_data, processed_data, uid, cluster, output)
         sem.acquire()
         jobs[uid] = {"clusters": result, "cluster_centers": cluster.cluster_centers_.tolist() if algorithm == 'KMEANS' else []}
         sem.release()
@@ -146,6 +166,7 @@ class Clustering(flask_restful.Resource):
         if job_id in jobs.keys():
             result = jobs[job_id]
             del jobs[job_id]
+            gc.collect()
             return send_message(result, label="data"), 200
         return send_message("Job not found"), 404
 

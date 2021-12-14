@@ -41,14 +41,14 @@ rota: GET /clustering/c2893574-7952-415d-a9af-b84698a726bf
         "phrase": "Cadê o carro que não chega?",
         "cluster": "0",
         "nearest_word": "jesus",
-        "nearest_words": ["vem","jesus","cadê"]
+        "frequent_words": ["vem","jesus","cadê"]
       },
       ...,
       {
         "phrase": "A ineternet revolucionou o mundo",
         "cluster": "2",
         "nearest_word": "chocolate",
-        "nearest_words": ["gosto","chocolate","quero"]
+        "frequent_words": ["gosto","chocolate","quero"]
       }
     ],
     "cluster_centers": [
@@ -84,14 +84,14 @@ rota: POST /knowledge/
             "phrase": "Cadê o carro que não chega?",
             "cluster": "0",
             "nearest_word": "jesus",
-            "nearest_words": ["vem","jesus","cadê"]
+            "frequent_words": ["vem","jesus","cadê"]
           },
           ...,
           {
             "phrase": "A ineternet revolucionou o mundo",
             "cluster": "2",
             "nearest_word": "chocolate",
-            "nearest_words": ["gosto","chocolate","quero"]
+            "frequent_words": ["gosto","chocolate","quero"]
           }
         ],
         "cluster_centers": [
