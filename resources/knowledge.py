@@ -27,13 +27,14 @@ def avg_distance(data, data_mean):
 def euclidian_mean(data, intent_reference, uuid):
     threshold = intent_threshold(intent_reference)
     clusters = {}
+    has_cluster_centers = len(data["cluster_centers"]) > 0 
     for entry in data["clusters"]:
         if entry["cluster"] not in clusters.keys():
             clusters[entry["cluster"]] = [entry["phrase"]]
         else:
             clusters[entry["cluster"]] += [entry["phrase"]]
     jobs[uuid] = [{"cluster": key,
-             "threshold": (value := intent_threshold(clusters[key], output_mean=data["cluster_centers"][key]) if len(clusters[key]) > 1 else 999),
+             "threshold": (value := intent_threshold(clusters[key], output_mean=data["cluster_centers"][key] if has_cluster_centers else None) if len(clusters[key]) > 1 else 999),
              "intent_test": "CANDIDATE" if value < threshold else "IGNORED"} for key in clusters.keys()]
 
 def nearest_clusters(data, intent_reference, uuid):

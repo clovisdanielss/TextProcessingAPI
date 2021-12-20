@@ -6,6 +6,15 @@ Api que aplica Kmeans à uma série de frases. Para isso usei um [embedding](htt
 Recebe como entrada:
 
 rota: POST /clustering/?n_clusters=<i>total_de_clusters</i>
+
+É possivel usar os seguintes parâmetros de query:
+|Parametro|Descrição|
+|---|---|
+|algorithm| KMEANS ou DBSCAN  |
+|max_clusters| Roda o KOptimal(Gap Statistics) para decidir o numero de clusters entre 0 e max_clusters para o KMEANS|
+|n_clusters|Define o número de clusters que os dados serão separados no KMEANS|
+|distance_neighboor|Define a distância máxima para determinar se um ponto é vizinho de outro no DBSCAN|
+
 ```json
 {
     "messages":[
@@ -76,6 +85,20 @@ O mesmo esquema é aplicado a cada cluster encontrado pela análise. Se algum cl
 apresentar a distância média menor que a intenção, consideramos ele uma possível intenção
 
 rota: POST /knowledge/
+
+Aqui, duas estratégias podem ser definidas na query:
+
+|Query|Descrição|
+|---|---|
+|algorithm|euclidian_mean ou neareast_clusters|
+
+As estratégias são definidas da seguinte forma:
+
+|Estratégia|Descrição|
+|---|---|
+|neareast_clusters|Procura quais dos clusters definido no payload se aproxima mais à intenção de referência|
+|euclidian_mean|É verificado se a distância média de cada cluster é inferior ou igual a distância média da intenção de referência|
+
 ```json
 {
     "data": {

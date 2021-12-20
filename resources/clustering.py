@@ -72,6 +72,8 @@ def nearest_word(most_frequent, output, cluster, n=5):
         nearest_word = None
         for word in words:
             mean = 0
+            if class_sample == -1:
+                continue
             for i in indices[class_sample]:
                 mean += np.linalg.norm(output[i] - embed(word).numpy())
             mean /= len(indices)
@@ -103,10 +105,9 @@ def run_kmeans(uid, n_clusters, max_clusters, output, algorithm):
     cluster = KMeans(n_clusters=n_clusters, random_state=0).fit(output)
     return cluster
 
-def run_dbscan(uid, n_clusters, output, algorithm):
-    n_clusters = int(n_clusters)
+def run_dbscan(uid, distance_neighboor, output, algorithm):
     api.app.logger.info("Job %s - Running %s", uid, algorithm)
-    cluster = DBSCAN().fit(output)
+    cluster = DBSCAN(eps=distance_neighboor).fit(output)
     return cluster
 
 def build_result(raw_data, processed_data, uid, cluster, output):
@@ -118,7 +119,7 @@ def build_result(raw_data, processed_data, uid, cluster, output):
         result += show_first_n(raw_data, processed_data, i, cluster, nearest=nearest, most_frequent=most_freq)
     return result
 
-def process_data(data, uid, n_clusters, max_clusters, algorithm, n_components=64):
+def process_data(data, uid, n_clusters, max_clusters, distance_neighboor, algorithm, n_components=64):
     time_start = time()
     if algorithm == "KMEANS" and max_clusters is None and n_clusters is None:
         jobs[uid] = send_message("Must exist a query with max_clusters or n_clusters", label="error")
@@ -148,7 +149,7 @@ def process_data(data, uid, n_clusters, max_clusters, algorithm, n_components=64
         if algorithm == 'KMEANS':
             cluster = run_kmeans(uid, n_clusters, max_clusters, output, algorithm)
         elif algorithm == 'DBSCAN':
-            cluster = run_dbscan(uid, n_clusters, output, algorithm)
+            cluster = run_dbscan(uid, distance_neighboor, output, algorithm)
         result = build_result(raw_data, processed_data, uid, cluster, output)
         sem.acquire()
         jobs[uid] = {"clusters": result, "cluster_centers": cluster.cluster_centers_.tolist() if algorithm == 'KMEANS' else []}
@@ -174,10 +175,11 @@ class Clustering(flask_restful.Resource):
         body = flask.request.json
         n_clusters = flask.request.args.get('n_clusters')
         max_clusters = flask.request.args.get('max_clusters')
+        distance_neighboor = float(flask.request.args.get('distance_neighboor'))
         algorithm = flask.request.args.get('algorithm')
         if algorithm is None:
             algorithm = 'KMEANS'
         uid = str(uuid.uuid4())
-        thread = Thread(target=process_data, args=(body["messages"], uid, n_clusters, max_clusters, algorithm))
+        thread = Thread(target=process_data, args=(body["messages"], uid, n_clusters, max_clusters, distance_neighboor, algorithm))
         thread.start()
         return send_message(uid, label="id"), 201
